@@ -95,10 +95,16 @@ typedef	^	AD_InputFile	CHARACTER(1024)	AFNames	{:}	-	-	"Airfoil file names (NumA
 typedef	^	AD_InputFile	LOGICAL	UseBlCm	-	-	-	"Include aerodynamic pitching moment in calculations?"	flag
 #typedef	^	AD_InputFile	IntKi	NumBlNds	-	-	-	"Number of blade nodes used in the analysis"	-
 typedef	^	AD_InputFile	AD_BladePropsType	BladeProps	{:}	-	-	"blade property information from blade input files"	-
+typedef	^	AD_InputFile	IntKi	NumTwrAFfiles	-	-	-	"Number of airfoil files used for tower sections"	-
+typedef	^	AD_InputFile	CHARACTER(1024)	TwrAFNames	{:}	-	-	"Tower Airfoil file names (NumAF lines)"	"quoted strings"
 typedef	^	AD_InputFile	IntKi	NumTwrNds	-	-	-	"Number of tower nodes used in the analysis"	-
 typedef	^	AD_InputFile	ReKi	TwrElev	{:}	-	-	"Elevation at tower node"	m
 typedef	^	AD_InputFile	ReKi	TwrDiam	{:}	-	-	"Diameter of tower at node"	m
+typedef	^	AD_InputFile	IntKi	NumTwrAlf	-	-	-	"Length of the Alpha and Coefs arrays"	-
+typedef	^	AD_InputFile	ReKi	TwrAoA	{:}	-	-	"Attack of angle for tower aerofoil"	-
+typedef	^	AD_InputFile	ReKi	TwrCl	{:}	-	-	"Coefficient of lift at tower node"	-
 typedef	^	AD_InputFile	ReKi	TwrCd	{:}	-	-	"Coefficient of drag at tower node"	-
+typedef	^	AD_InputFile	ReKi	TwrCm	{:}	-	-	"Coefficient of pitching moment at tower node"	-
 typedef	^	AD_InputFile	LOGICAL	SumPrint	-	-	-	"Generate a summary file listing input options and interpolated properties to "<rootname>.AD.sum"?"	flag
 typedef	^	AD_InputFile	IntKi	NBlOuts	-	-	-	"Number of blade node outputs [0 - 9]"	-
 typedef	^	AD_InputFile	IntKi	BlOutNd	{9}	-	-	"Blade nodes whose values will be output"	-
@@ -132,6 +138,9 @@ typedef	^	MiscVarType	ReKi	AllOuts	{:}	-	-	"An array holding the value of all of
 typedef	^	MiscVarType	ReKi	W_Twr	{:}	-	-	"relative wind speed normal to the tower at node j"	m/s
 typedef	^	MiscVarType	ReKi	X_Twr	{:}	-	-	"local x-component of force per unit length of the jth node in the tower"	m/s
 typedef	^	MiscVarType	ReKi	Y_Twr	{:}	-	-	"local y-component of force per unit length of the jth node in the tower"	m/s
+typedef	^	MiscVarType	ReKi	X_TwrLift	{:}	-	-	"local x-component of force per unit length of the jth node in the tower"	m/s
+typedef	^	MiscVarType	ReKi	Y_TwrLift	{:}	-	-	"local y-component of force per unit length of the jth node in the tower"	m/s
+typedef	^	MiscVarType	ReKi	M_Twr	{:}	-	-	"local pitching moment per unit length of the jth node in the tower"	Nm/m
 typedef	^	MiscVarType	ReKi	Curve	{:}{:}	-	-	"curvature angle, saved for possible output to file"	rad
 typedef	^	MiscVarType	ReKi	TwrClrnc	{:}{:}	-	-	"Distance between tower (including tower radius) and blade node (not including blade width), saved for possible output to file"	m
 typedef	^	MiscVarType	ReKi	X	{:}{:}	-	-	"normal force per unit length (normal to the plane, not chord) of the jth node in the kth blade"	N/m
@@ -159,8 +168,13 @@ typedef	^	ParameterType	Logical	CavitCheck	-	-	-	"Flag that tells us if we want 
 typedef	^	ParameterType	IntKi	NumBlades	-	-	-	"Number of blades on the turbine"	-
 typedef	^	ParameterType	IntKi	NumBlNds	-	-	-	"Number of nodes on each blade"	-
 typedef	^	ParameterType	IntKi	NumTwrNds	-	-	-	"Number of nodes on the tower"	-
+typedef	^	ParameterType	ReKi	TwrElev	{:}	-	-	"Elevation at tower node"	m
 typedef	^	ParameterType	ReKi	TwrDiam	{:}	-	-	"Diameter of tower at node"	m
+typedef	^	ParameterType	IntKi	NumTwrAlf	-	-	-	"Length of the Alpha and Coefs arrays"	-
+typedef	^	ParameterType	ReKi	TwrAoA	{:}	-	-	"Attack of angle for tower aerofoil"	-
+typedef	^	ParameterType	ReKi	TwrCl	{:}	-	-	"Coefficient of lift at tower node"	-
 typedef	^	ParameterType	ReKi	TwrCd	{:}	-	-	"Coefficient of drag at tower node"	-
+typedef	^	ParameterType	ReKi	TwrCm	{:}	-	-	"Coefficient of pitching moment at tower node"	-
 typedef	^	ParameterType	ReKi	AirDens	-	-	-	"Air density"	kg/m^3
 typedef	^	ParameterType	ReKi	KinVisc	-	-	-	"Kinematic air viscosity"	m^2/s
 typedef	^	ParameterType	ReKi	SpdSound	-	-	-	"Speed of sound"	m/s
@@ -194,7 +208,8 @@ typedef	^	InputType	ReKi	InflowOnTower	{:}{:}	-	-	"U,V,W at nodes on the tower"	
 
 # ..... Outputs ...................................................................................................................
 # Define outputs that are contained on the mesh here:
-typedef	^	OutputType	MeshType	TowerLoad	-	-	-	"loads on the tower"	-
+typedef	^	OutputType	MeshType	TowerLoad	-	-	-	"drag loads on the tower"	-
+typedef	^	OutputType	MeshType	TowerLiftLoad	-	-	-	"lift loads on the tower"	-
 typedef	^	OutputType	MeshType	BladeLoad	{:}	-	-	"loads on each blade"	-
 # Define outputs that are not on this mesh here:
 typedef	^	OutputType	ReKi	WriteOutput	{:}	-	-	"Data to be written to an output file: see WriteOutputHdr for names of each variable"	"see WriteOutputUnt"
