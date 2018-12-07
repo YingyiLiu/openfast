@@ -1877,7 +1877,7 @@ SUBROUTINE ReadPrimaryFile( InputFile, InputFileData, ADBlFile, OutFileRoot, UnE
    type(AD_InputFile), intent(inout)   :: InputFileData                       ! All the data in the AeroDyn input file
    
       ! Local variables:
-   real(ReKi)                    :: TmpAry(3)                                 ! array to help read tower properties table
+   real(ReKi)                    :: TmpAry(2)                                 ! array to help read tower properties table
    integer(IntKi)                :: I                                         ! loop counter
    integer(IntKi)                :: UnIn                                      ! Unit number for reading file
      
@@ -2263,6 +2263,36 @@ SUBROUTINE ReadPrimaryFile( InputFile, InputFileData, ADBlFile, OutFileRoot, UnE
    CALL ReadCom( UnIn, InputFile, 'Section Header: Tower Influence and Aerodynamics', ErrStat2, ErrMsg2, UnEc )
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
       
+      ! NumTwrAFfiles - Number of airfoil files used for tower sections (-):
+   CALL ReadVar( UnIn, InputFile, InputFileData%NumTwrAFfiles, "NumTwrAFfiles", "Number of airfoil files used for tower sections (-)", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      IF ( ErrStat >= AbortErrLev ) RETURN
+   
+         ! Allocate space to hold TwrAFNames
+      ALLOCATE( InputFileData%TwrAFNames(InputFileData%NumTwrAFfiles), STAT=ErrStat2)
+         IF (ErrStat2 /= 0 ) THEN
+            CALL SetErrStat( ErrID_Fatal, "Error allocating TwrAFNames.", ErrStat, ErrMsg, RoutineName)
+            CALL Cleanup()
+            RETURN
+         END IF
+               
+      ! TwrAFNames - Airfoil file names (NumTwrAFfiles lines) (quoted strings):
+   DO I = 1,InputFileData%NumTwrAFfiles            
+      CALL ReadVar ( UnIn, InputFile, InputFileData%TwrAFNames(I), 'TwrAFNames('//TRIM(Num2Lstr(I))//')', 'Airfoil '//TRIM(Num2Lstr(I))//' file name', ErrStat2, ErrMsg2, UnEc )
+         CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      IF ( PathIsRelative( InputFileData%TwrAFNames(I) ) ) InputFileData%TwrAFNames(I) = TRIM(PriPath)//TRIM(InputFileData%TwrAFNames(I))
+   END DO
+             
+      ! Return on error at end of section
+   IF ( ErrStat >= AbortErrLev ) THEN
+      CALL Cleanup()
+      RETURN
+   END IF
+   
+   CALL ReadTwrAeroFoils ( InputFileData%TwrAFNames(1), InputFileData, UnEc, ErrStat, ErrMsg )  
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      IF ( ErrStat >= AbortErrLev ) RETURN
+      
       ! NumTwrNds - Number of tower nodes used in the analysis (-):
    CALL ReadVar( UnIn, InputFile, InputFileData%NumTwrNds, "NumTwrNds", "Number of tower nodes used in the analysis (-)", ErrStat2, ErrMsg2, UnEc)
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
@@ -2280,8 +2310,6 @@ SUBROUTINE ReadPrimaryFile( InputFile, InputFileData, ADBlFile, OutFileRoot, UnE
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
    CALL AllocAry( InputFileData%TwrDiam, InputFileData%NumTwrNds, 'TwrDiam', ErrStat2, ErrMsg2)
       CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
-   CALL AllocAry( InputFileData%TwrCd, InputFileData%NumTwrNds, 'TwrCd', ErrStat2, ErrMsg2)
-      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
       
       ! Return on error if we didn't allocate space for the next inputs
    IF ( ErrStat >= AbortErrLev ) THEN
@@ -2290,13 +2318,13 @@ SUBROUTINE ReadPrimaryFile( InputFile, InputFileData, ADBlFile, OutFileRoot, UnE
    END IF
             
    DO I=1,InputFileData%NumTwrNds
-      call ReadAry ( UnIn, InputFile, TmpAry,  3, 'TwrNds',  'Properties for tower node ' &
+      call ReadAry ( UnIn, InputFile, TmpAry,  2, 'TwrNds',  'Properties for tower node ' &
                      //trim( Int2LStr( I ) )//'.', errStat2, errMsg2, UnEc )
          call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
             
       InputFileData%TwrElev(I) = TmpAry( 1)
       InputFileData%TwrDiam(I) = TmpAry( 2)
-      InputFileData%TwrCd(I)   = TmpAry( 3)      
+    
    END DO
                
       ! Return on error at end of section
@@ -2371,7 +2399,115 @@ CONTAINS
 
    END SUBROUTINE Cleanup
    !...............................................................................................................................
-END SUBROUTINE ReadPrimaryFile      
+END SUBROUTINE ReadPrimaryFile
+!----------------------------------------------------------------------------------------------------------------------------------
+SUBROUTINE ReadTwrAeroFoils ( InputFile, InputFileData, UnEc, ErrStat, ErrMsg )
+! This routine reads a Tower-section aerodynamic properties input file, written by Yingyi Liu, Kyushu University, Jan. 26, 2017
+!..................................................................................................................................
+
+
+      ! Passed variables:
+
+   CHARACTER(*),             INTENT(IN)      :: InputFile                           ! Name of the tower input file data
+!   REAL(ReKi),               INTENT(INOUT)  :: TwrCl
+!   REAL(ReKi),               INTENT(INOUT)  :: TwrCd
+!   REAL(ReKi),               INTENT(INOUT)  :: TwrCm
+   
+   INTEGER(IntKi),           INTENT(IN)      :: UnEc                                ! I/O unit for echo file. If present and > 0, write to UnEc
+
+   INTEGER(IntKi),           INTENT(OUT)     :: ErrStat                             ! Error status
+   CHARACTER(*),             INTENT(OUT)     :: ErrMsg                              ! Error message
+   TYPE(AD_InputFile),       INTENT(INOUT)   :: InputFileData                       ! All the data in the AeroDyn input file
+   
+      ! Local variables:
+   real(ReKi)                    :: TmpAry(4)                                 ! array to help read tower properties table   ! original code
+
+      ! Local variables:
+
+   INTEGER(IntKi)               :: I,NumNonData                                           ! A generic DO index.
+   INTEGER( IntKi )             :: UnIn                                            ! Unit number for reading file
+   INTEGER(IntKi)               :: ErrStat2 , IOS                                  ! Temporary Error status
+   CHARACTER(ErrMsgLen)         :: ErrMsg2                                         ! Temporary Err msg
+   CHARACTER(*), PARAMETER      :: RoutineName = 'ReadTwrAeroFoil'
+   CHARACTER(ErrMsgLen)         :: FilePath                                        ! File path
+   
+   
+   ErrStat = ErrID_None
+   ErrMsg  = ""
+      
+   CALL GetPath( InputFile, FilePath )     ! Input files will be relative to the path where the primary input file is located.
+!   print*, trim(FilePath)
+   
+      ! Get an available unit number for the file.
+
+   CALL GetNewUnit( UnIn, ErrStat2, ErrMsg2 )
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+
+      ! Open the Primary input file.
+
+   CALL OpenFInpFile ( UnIn, InputFile, ErrStat2, ErrMsg2 )
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      IF ( ErrStat >= AbortErrLev ) THEN
+         CALL Cleanup()
+         RETURN
+      END IF
+      
+   CALL ReadCom( UnIn, InputFile, 'Table of aerodynamics coefficients for NACA_0012 airfoil', ErrStat2, ErrMsg2, UnEc )
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      
+   CALL ReadVar( UnIn, InputFile, InputFileData%NumTwrAlf, "NumAlf", "Number of data lines in the following table", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      IF ( ErrStat >= AbortErrLev ) RETURN      
+ 
+   CALL ReadVar( UnIn, InputFile, NumNonData, "NumNonData", "Number of non-data lines from here to the following table", ErrStat2, ErrMsg2, UnEc)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      IF ( ErrStat >= AbortErrLev ) RETURN
+   
+         ! allocate space for tower inputs:
+   CALL AllocAry( InputFileData%TwrAoA,  InputFileData%NumTwrAlf, 'TwrAoA',  ErrStat2, ErrMsg2)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AllocAry( InputFileData%TwrCl, InputFileData%NumTwrAlf, 'TwrCl', ErrStat2, ErrMsg2)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AllocAry( InputFileData%TwrCd, InputFileData%NumTwrAlf, 'TwrCd', ErrStat2, ErrMsg2)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+   CALL AllocAry( InputFileData%TwrCm, InputFileData%NumTwrAlf, 'TwrCm', ErrStat2, ErrMsg2)
+      CALL SetErrStat( ErrStat2, ErrMsg2, ErrStat, ErrMsg, RoutineName )
+      
+   DO I=1, NumNonData
+      READ(UnIn,*)
+   ENDDO
+   
+   DO I=1,InputFileData%NumTwrAlf
+      call ReadAry ( UnIn, InputFile, TmpAry,  4, 'TwrAFCoefs',  'Tower airfoil data at Line ' &
+                     //trim( Int2LStr( I ) )//'.', errStat2, errMsg2, UnEc )
+         call setErrStat( errStat2, ErrMsg2 , errStat, ErrMsg , RoutineName )
+            
+      InputFileData%TwrAoA(I)     = TmpAry( 1)
+      InputFileData%TwrCl(I)      = TmpAry( 2)
+      InputFileData%TwrCd(I)      = TmpAry( 3)
+      InputFileData%TwrCm(I)      = TmpAry( 4)
+      
+!      print*, InputFileData%TwrAoA(I),InputFileData%TwrCl(I),InputFileData%TwrCd(I),InputFileData%TwrCm(I)
+      
+   END DO
+               
+      ! Return on error at end of section
+   IF ( ErrStat >= AbortErrLev ) THEN
+      CALL Cleanup()
+      RETURN
+   END IF   
+
+CONTAINS
+   !...............................................................................................................................
+   SUBROUTINE Cleanup()
+   ! This subroutine cleans up any local variables and closes input files
+   !...............................................................................................................................
+
+   IF (UnIn > 0) CLOSE ( UnIn )
+
+   END SUBROUTINE Cleanup
+   !...............................................................................................................................
+END SUBROUTINE ReadTwrAeroFoils
 !----------------------------------------------------------------------------------------------------------------------------------
 SUBROUTINE ReadBladeInputs ( ADBlFile, BladeKInputFileData, UnEc, ErrStat, ErrMsg )
 ! This routine reads a blade input file.
