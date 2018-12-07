@@ -1920,7 +1920,8 @@ contains
    
 END SUBROUTINE Init_BEMTmodule
 !----------------------------------------------------------------------------------------------------------------------------------
-!> This subroutine calculates the tower loads for the AeroDyn TowerLoad output mesh.
+!> This subroutine calculates the tower loads for the AeroDyn TowerLoad output mesh, modified by Yingyi Liu, Kyushu University to 
+!> allow calculation of airfoil-shaped tower
 SUBROUTINE ADTwr_CalcOutput(p, u, m, y, ErrStat, ErrMsg )
 
    TYPE(AD_InputType),           INTENT(IN   )  :: u           !< Inputs at Time t
@@ -1933,10 +1934,11 @@ SUBROUTINE ADTwr_CalcOutput(p, u, m, y, ErrStat, ErrMsg )
 
 
    INTEGER(IntKi)                               :: j
-   real(ReKi)                                   :: q
+   real(ReKi)                                   :: fd,fl,pi
    real(ReKi)                                   :: V_rel(3)    ! relative wind speed on a tower node
    real(ReKi)                                   :: VL(2)       ! relative local x- and y-components of the wind speed on a tower node
    real(ReKi)                                   :: tmp(3)
+   real(ReKi)                                   :: AoAD,AoAR,TwrCl,TwrCd,TwrCm,LenSec
    
    !integer(intKi)                               :: ErrStat2
    !character(ErrMsgLen)                         :: ErrMsg2
@@ -1945,37 +1947,109 @@ SUBROUTINE ADTwr_CalcOutput(p, u, m, y, ErrStat, ErrMsg )
    
    ErrStat = ErrID_None
    ErrMsg  = ""
+   pi=3.141592653589793_ReKi
 
+   open(10000,file="AoAoutput.txt",status="unknown")
    
    do j=1,p%NumTwrNds
       
-      V_rel = u%InflowOnTower(:,j) - u%TowerMotion%TranslationVel(:,j) ! relative wind speed at tower node
+      V_rel = u%InflowOnTower(:,j) - u%TowerMotion%TranslationDisp(:,j) ! relative wind speed at tower node
    
       tmp   = u%TowerMotion%Orientation(1,:,j)
       VL(1) = dot_product( V_Rel, tmp )            ! relative local x-component of wind speed of the jth node in the tower
+!      VL(1) = -VL(1)
       tmp   = u%TowerMotion%Orientation(2,:,j)
       VL(2) = dot_product( V_Rel, tmp )            ! relative local y-component of wind speed of the jth node in the tower
+      AoAR = atan2(VL(2),VL(1))
+      AoAD = AoAR*R2D
+
+      !if (j.eq.1) write(10000,'(3f12.4)') u%InflowOnTower(1,j),u%InflowOnTower(2,j),u%InflowOnTower(3,j)
+      !if (j.eq.1) write(10000,'(3f12.4)') u%TowerMotion%TranslationDisp(1,j),u%TowerMotion%TranslationDisp(2,j),u%TowerMotion%TranslationDisp(3,j)
+      !if (j.eq.1) write(10000,'(3f12.4)') V_rel(1),V_rel(2),V_rel(3)
+      !if (j.eq.1) write(10000,'(3f12.4)') VL(1),VL(2), AoAD
+      !if (j.eq.1) write(10000,*)
       
-      m%W_Twr(j)  =  TwoNorm( VL )            ! relative wind speed normal to the tower at node j      
-      q     = 0.5 * p%TwrCd(j) * p%AirDens * p%TwrDiam(j) * m%W_Twr(j)
+      if (j.le.3) then
+        TwrCd=1.00d0
+        TwrCl=0.00d0
+        TwrCm=0.00d0
+      else
+        CALL TwrAirFoilCoef_Calc(AoAD,p,TwrCl,TwrCd,TwrCm)
+      endif
       
-         ! force per unit length of the jth node in the tower
-      tmp(1) = q * VL(1)
-      tmp(2) = q * VL(2)
-      tmp(3) = 0.0_ReKi
+      m%W_Twr(j)  =  TwoNorm( VL )            ! relative wind speed normal to the tower at node j
       
+      ! calculate aerodynamic forces and moment
+      fd     = 0.5 * p%AirDens * m%W_Twr(j)**2 * p%TwrDiam(j) * TwrCd   ! drag force
+      fl     = 0.5 * p%AirDens * m%W_Twr(j)**2 * p%TwrDiam(j) * TwrCl   ! lift force, q=1/2*rho*v**2*c*Cl
+      
+      ! for output
+      m%X_Twr(j) = fd * cos(AoAR)
+      m%Y_Twr(j) = fd * sin(AoAR)
+      m%X_TwrLift(j) = -fl * sin(AoAR)
+      m%Y_TwrLift(j) =  fl * cos(AoAR)
+      
+     ! force per unit length of the jth node in the tower, drag force
+      tmp(1) = m%X_Twr(j) + m%X_TwrLift(j)
+      tmp(2) = m%Y_Twr(j) + m%Y_TwrLift(j)
+      tmp(3) = 0.0_ReKi      
+
       y%TowerLoad%force(:,j) = matmul( tmp, u%TowerMotion%Orientation(:,:,j) ) ! note that I'm calculating the transpose here, which is okay because we have 1-d arrays
-      m%X_Twr(j) = tmp(1)
-      m%Y_Twr(j) = tmp(2)
+
+       
+     ! length of each tower section
+      if (j.eq.p%NumTwrNds) then
+        LenSec = (p%TwrElev(j)-p%TwrElev(j-1))/2.0_ReKi
+      elseif (j.eq.1) then
+        LenSec = (p%TwrElev(j+1)-p%TwrElev(j))/2.0_ReKi        
+      else
+        LenSec = (p%TwrElev(j+1)-p%TwrElev(j-1))/2.0_ReKi
+      endif
       
+     ! moment per unit length of the jth node in the tower
+      tmp(1) = 0.0_ReKi
+      tmp(2) = 0.0_ReKi
+      tmp(3) = 0.5 * p%AirDens * m%W_Twr(j)**2 * p%TwrDiam(j)**2 * LenSec * TwrCm
+
+      y%TowerLoad%moment(:,j) = matmul( tmp, u%TowerMotion%Orientation(:,:,j) )
+      m%M_Twr(j) = tmp(3)
       
-         ! moment per unit length of the jth node in the tower
-      y%TowerLoad%moment(:,j) = 0.0_ReKi
-      
+!      print*, 'moment',j, y%TowerLoad%moment(:,2)
    end do
    
 
 END SUBROUTINE ADTwr_CalcOutput
+!----------------------------------------------------------------------------------------------------------------------------------
+!> This routine finds the lift, drag and pitching moment coefficients with respect to attack of angle, written by Yingyi Liu, Kyushu University, Jan. 30, 2017
+
+SUBROUTINE TwrAirFoilCoef_Calc(AoA,p,TwrCl,TwrCd,TwrCm) 
+ 
+   REAL(ReKi),                   INTENT(IN   )  :: AoA         !< Attack angle
+   TYPE(AD_ParameterType),       INTENT(IN   )  :: p           !< Parameters
+   
+   INTEGER(IntKi)                               :: I,AoALoc
+   REAL(ReKi),                   INTENT(  OUT)  :: TwrCl,TwrCd,TwrCm
+ 
+
+      AoALoc=0
+      DO I=1,p%NumTwrAlf-1
+      IF(AoA>=p%TwrAoA(I).AND.AoA<=p%TwrAoA(I+1)) THEN
+      AoALoc=1
+      EXIT
+      END IF
+      END DO
+
+      IF(AoALoc==0) THEN
+      PRINT*, ' Error. In TwrAirFoilCoef_Calc, airfoil coefficients calculation, attack angle out of range.'
+      STOP
+      ELSE
+      TwrCl =( (p%TwrCl(i+1)-p%TwrCl(i))/(p%TwrAoA(i+1)-p%TwrAoA(i)) )* (AoA-p%TwrAoA(i)) + p%TwrCl(i)
+      TwrCd =( (p%TwrCd(i+1)-p%TwrCd(i))/(p%TwrAoA(i+1)-p%TwrAoA(i)) )* (AoA-p%TwrAoA(i)) + p%TwrCd(i)
+      TwrCm =( (p%TwrCm(i+1)-p%TwrCm(i))/(p%TwrAoA(i+1)-p%TwrAoA(i)) )* (AoA-p%TwrAoA(i)) + p%TwrCm(i)
+      ENDIF
+      
+ 
+END SUBROUTINE TwrAirFoilCoef_Calc
 !----------------------------------------------------------------------------------------------------------------------------------
 !> This routine checks for invalid inputs to the tower influence models.
 SUBROUTINE CheckTwrInfl(u, ErrStat, ErrMsg )
