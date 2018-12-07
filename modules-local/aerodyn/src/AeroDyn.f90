@@ -528,6 +528,12 @@ subroutine Init_MiscVars(m, p, u, y, errStat, errMsg)
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
    call AllocAry( m%Y_Twr, p%NumTwrNds, 'm%Y_Twr', ErrStat2, ErrMsg2 )
       call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   call AllocAry( m%X_TwrLift, p%NumTwrNds, 'm%X_TwrLift', ErrStat2, ErrMsg2 )
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   call AllocAry( m%Y_TwrLift, p%NumTwrNds, 'm%Y_TwrLift', ErrStat2, ErrMsg2 )
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
+   call AllocAry( m%M_Twr, p%NumTwrNds, 'm%M_Twr', ErrStat2, ErrMsg2 )
+      call SetErrStat( errStat2, errMsg2, errStat, errMsg, RoutineName )
       ! save blade calculations for output:
 if (p%TwrPotent /= TwrPotent_none .or. p%TwrShadow) then
    call AllocAry( m%TwrClrnc, p%NumBlNds, p%NumBlades, 'm%TwrClrnc', ErrStat2, ErrMsg2 )
@@ -572,6 +578,9 @@ end if
       m%W_Twr = 0.0_ReKi
       m%X_Twr = 0.0_ReKi
       m%Y_Twr = 0.0_ReKi
+      m%X_TwrLift = 0.0_ReKi
+      m%Y_TwrLift = 0.0_ReKi
+      m%M_Twr = 0.0_ReKi
    end if
    
    
