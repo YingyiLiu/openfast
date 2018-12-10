@@ -938,9 +938,18 @@ subroutine SetParameters( InitInp, InputFileData, p, ErrStat, ErrMsg )
       p%NumTwrNds     = 0
    else
       p%NumTwrNds     = InputFileData%NumTwrNds
+      p%NumTwrAlf     = InputFileData%NumTwrAlf
+      if (.not.allocated(p%TwrElev)) then
+        allocate (p%TwrElev(p%NumTwrNds))
+      endif
+      p%TwrElev(:)    = InputFileData%TwrElev(:)
       
+!     call move_alloc( InputFileData%TwrElev, p%TwrElev )    ! LYY, cannot be used because of Line 663, AeroDyn.f90
       call move_alloc( InputFileData%TwrDiam, p%TwrDiam )
+      call move_alloc( InputFileData%TwrAoA,  p%TwrAoA )      
+      call move_alloc( InputFileData%TwrCl,   p%TwrCl)       ! LYY, Jan.24, 2017
       call move_alloc( InputFileData%TwrCd,   p%TwrCd )      
+      call move_alloc( InputFileData%TwrCm,   p%TwrCm)       ! LYY, Jan.24, 2017
    end if
    
    p%AirDens          = InputFileData%AirDens          
@@ -1972,11 +1981,11 @@ SUBROUTINE ADTwr_CalcOutput(p, u, m, y, ErrStat, ErrMsg )
       AoAR = atan2(VL(2),VL(1))
       AoAD = AoAR*R2D
 
-      !if (j.eq.1) write(10000,'(3f12.4)') u%InflowOnTower(1,j),u%InflowOnTower(2,j),u%InflowOnTower(3,j)
-      !if (j.eq.1) write(10000,'(3f12.4)') u%TowerMotion%TranslationDisp(1,j),u%TowerMotion%TranslationDisp(2,j),u%TowerMotion%TranslationDisp(3,j)
-      !if (j.eq.1) write(10000,'(3f12.4)') V_rel(1),V_rel(2),V_rel(3)
-      !if (j.eq.1) write(10000,'(3f12.4)') VL(1),VL(2), AoAD
-      !if (j.eq.1) write(10000,*)
+      if (j.eq.1) write(10000,'(3f12.4)') u%InflowOnTower(1,j),u%InflowOnTower(2,j),u%InflowOnTower(3,j)
+      if (j.eq.1) write(10000,'(3f12.4)') u%TowerMotion%TranslationDisp(1,j),u%TowerMotion%TranslationDisp(2,j),u%TowerMotion%TranslationDisp(3,j)
+      if (j.eq.1) write(10000,'(3f12.4)') V_rel(1),V_rel(2),V_rel(3)
+      if (j.eq.1) write(10000,'(3f12.4)') VL(1),VL(2), AoAD
+      if (j.eq.1) write(10000,*)
       
       if (j.le.3) then
         TwrCd=1.00d0
@@ -2010,7 +2019,7 @@ SUBROUTINE ADTwr_CalcOutput(p, u, m, y, ErrStat, ErrMsg )
       if (j.eq.p%NumTwrNds) then
         LenSec = (p%TwrElev(j)-p%TwrElev(j-1))/2.0_ReKi
       elseif (j.eq.1) then
-        LenSec = (p%TwrElev(j+1)-p%TwrElev(j))/2.0_ReKi        
+        LenSec = (p%TwrElev(j+1)-p%TwrElev(j))/2.0_ReKi
       else
         LenSec = (p%TwrElev(j+1)-p%TwrElev(j-1))/2.0_ReKi
       endif

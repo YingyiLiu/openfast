@@ -1658,13 +1658,13 @@ SUBROUTINE Calc_WriteOutput( p, u, m, y, OtherState, indx, ErrStat, ErrMsg )
       tmp = matmul( u%TowerMotion%Orientation(:,:,j) , u%TowerMotion%TranslationVel(:,j) )
       m%AllOuts( TwNSTV(:,beta) ) = tmp
       
-      m%AllOuts( TwNVrel(beta) ) = m%W_Twr(j)                           ! relative velocity   
+      m%AllOuts( TwNVrel(beta) ) = m%W_Twr(j)                           ! relative velocity
       m%AllOuts( TwNDynP(beta) ) = 0.5 * p%AirDens * m%W_Twr(j)**2      ! dynamic pressure
       m%AllOuts( TwNRe(  beta) ) = p%TwrDiam(j) * m%W_Twr(j) / p%KinVisc / 1.0E6 ! reynolds number (in millions)
       m%AllOuts( TwNM(   beta) ) = m%W_Twr(j) / p%SpdSound               ! Mach number
-      m%AllOuts( TwNFdx( beta) ) = m%X_Twr(j)         
-      m%AllOuts( TwNFdy( beta) ) = m%Y_Twr(j)         
-      m%AllOuts( TwNFlx( beta) ) = m%X_TwrLift(j)         
+      m%AllOuts( TwNFdx( beta) ) = m%X_Twr(j)
+      m%AllOuts( TwNFdy( beta) ) = m%Y_Twr(j)
+      m%AllOuts( TwNFlx( beta) ) = m%X_TwrLift(j)
       m%AllOuts( TwNFly( beta) ) = m%Y_TwrLift(j)
       m%AllOuts( TwNMm ( beta) ) = m%M_Twr(j)
       
